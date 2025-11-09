@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: evolution-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+    ports:
+      - "5432:5432"
+    volumes:
+      - evolution_db:/var/lib/postgresql/data
+    networks:
+      - evolution-network
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    environment:
+      # Configuração do servidor
+      SERVER_URL: http://localhost:8080
+      PORT: 8080
+      
+      # API Key
+      API_KEY: ${EVOLUTION_API_KEY:-sua-chave-secreta}
+      
+      # Webhook - URL do seu projeto Next.js
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:3000/api/webhook}
+      WEBHOOK_EVENTS: messages.upsert,connection.update,qrcode.update
+      
+      # Configurações do WhatsApp
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: '#198754'
+      
+      # Logs
+      LOG_LEVEL: ERROR
+      LOG_COLOR: true
+      LOG_BAILEYS: error
+      
+      # Configurações de instância
+      CONFIG_SESSION_PHONE_CLIENT: Chrome
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      
+      # Redis (opcional - para produção)
+      # REDIS_ENABLED: false
+      # REDIS_URI: redis://localhost:6379
+      
+      # Database (opcional - para produção)
+      DATABASE_ENABLED: 'true'
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI:-postgresql://evolution:evolution@postgres:5432/evolution}
+      
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+      
+    networks:
+      - evolution-network
+
+volumes:
+  evolution_instances:
+  evolution_store:
+  evolution_db:
+
+networks:
+  evolution-network:
+    driver: bridge
+

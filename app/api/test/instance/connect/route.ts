@@ -8,7 +8,7 @@ import { supabaseService } from '@/lib/services/supabase-service';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { instanceName } = await request.json();
+    const { instanceName, accountId } = await request.json();
 
     if (!instanceName) {
       return NextResponse.json(
@@ -28,11 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Salvar instância no mock (ou Supabase se configurado)
-    // Para teste, vamos usar um account_id mockado
-    const mockAccountId = 'test-account-1';
-    
+    const targetAccountId =
+      typeof accountId === 'string' && accountId.length > 0
+        ? accountId
+        : process.env.TEST_ACCOUNT_ID || 'test-account-1';
+
     const instance = await supabaseService.createInstance({
-      account_id: mockAccountId,
+      account_id: targetAccountId,
       name: instanceName,
       status: 'connecting',
     });

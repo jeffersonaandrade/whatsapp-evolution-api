@@ -52,6 +52,24 @@
 - Resumo executivo
 - **⚠️ Pode estar desatualizada** - Verificar com ARQUITETURA_ATUAL.md
 
+### 8. **GUIA_DEPLOY_EVOLUTION_API_RENDER.md** 🚀
+- Guia completo para deploy da Evolution API no Render.com
+- Configuração passo a passo
+- Variáveis de ambiente necessárias
+- Configuração do UptimeRobot para manter servidor acordado 24/7
+- Integração com Motor (Vercel)
+- Troubleshooting completo
+
+**Quando ler:** Quando for fazer deploy da Evolution API no Render.com
+
+### 9. **GUIA_MIGRACAO_SUPABASE.md**
+- Guia para migrar do mock para Supabase real
+- Scripts SQL necessários
+- Configuração de variáveis de ambiente
+- Troubleshooting
+
+**Quando ler:** Quando for migrar do Supabase mockado para real
+
 ---
 
 ## 🎯 Quando Usar Cada Documento
@@ -73,8 +91,9 @@
 
 ### Ao Fazer Deploy
 1. Consultar **CHECKLIST_DESENVOLVIMENTO.md** para verificar itens de deploy
-2. Verificar variáveis de ambiente
-3. Testar integração com projeto cérebro
+2. Consultar **GUIA_DEPLOY_EVOLUTION_API_RENDER.md** para deploy da Evolution API
+3. Verificar variáveis de ambiente
+4. Testar integração com projeto cérebro
 
 ---
 
@@ -95,14 +114,16 @@ Os seguintes documentos podem estar desatualizados após a separação motor/cé
 
 ```
 docs/
-├── ARQUITETURA_ATUAL.md              ⭐ LEIA PRIMEIRO
-├── GUIA_INICIO_DESENVOLVIMENTO.md    🚀 Início rápido
-├── CHECKLIST_DESENVOLVIMENTO.md      ✅ Checklist
-├── INDICE_DOCUMENTACAO.md            📚 Este arquivo
-├── ARQUITETURA_BACKEND.md            ⚠️ Pode estar desatualizada
-├── ESPECIFICACAO_TECNICA_BACKEND.md  ⚠️ Pode estar desatualizada
-├── GUIA_RAPIDO_BACKEND.md            ⚠️ Pode estar desatualizada
-└── RESUMO_BACKEND.md                 ⚠️ Pode estar desatualizada
+├── ARQUITETURA_ATUAL.md                   ⭐ LEIA PRIMEIRO
+├── GUIA_INICIO_DESENVOLVIMENTO.md         🚀 Início rápido
+├── CHECKLIST_DESENVOLVIMENTO.md           ✅ Checklist
+├── GUIA_DEPLOY_EVOLUTION_API_RENDER.md    🚀 Deploy Evolution API
+├── GUIA_MIGRACAO_SUPABASE.md              📦 Migração Supabase
+├── INDICE_DOCUMENTACAO.md                 📚 Este arquivo
+├── ARQUITETURA_BACKEND.md                 ⚠️ Pode estar desatualizada
+├── ESPECIFICACAO_TECNICA_BACKEND.md       ⚠️ Pode estar desatualizada
+├── GUIA_RAPIDO_BACKEND.md                 ⚠️ Pode estar desatualizada
+└── RESUMO_BACKEND.md                      ⚠️ Pode estar desatualizada
 ```
 
 ---

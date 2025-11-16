@@ -336,6 +336,40 @@ docker-compose down -v
 
 ## 🐛 Troubleshooting
 
+### Evolução API com Supabase (Session Pooler) travando em migrations
+
+Quando usamos o Supabase no plano Free com o **session pooler** (`aws-*-pooler.supabase.com:6543`), o Evolution API tenta rodar ~50 migrations com Prisma na primeira inicialização. O pooler não mantém conexões longas e a instalação fica presa no log `prisma migrate deploy`.
+
+**Como resolver (passo a passo)**
+
+1. **Criar schema dedicado**
+   1. Abra o SQL Editor do Supabase.
+   2. Execute `create schema if not exists evolution;`
+   3. Confirme em `information_schema.schemata` que o schema apareceu.
+2. **Aplicar migrations manualmente**
+   1. Baixe o repositório `EvolutionAPI/evolution-api` ou entre no container e copie os arquivos de `prisma/postgresql-migrations`.
+   2. Para cada pasta numerada (ex.: `20240609...`), abra o arquivo `migration.sql`.
+   3. Cole e execute o SQL no editor do Supabase com o schema `evolution` selecionado. Faça isso na ordem indicada pelo prefixo numérico.
+   4. Após a última migration, rode:
+      ```sql
+      select table_schema, table_name
+      from information_schema.tables
+      where table_schema = 'evolution'
+      order by table_name;
+      ```
+      Deve listar todas as tabelas (`instances`, `messages`, etc.).
+3. **Configurar a string de conexão**
+   1. Use o session pooler:  
+      `postgresql://postgres.<project-id>:<SENHA>@aws-*-pooler.supabase.com:6543/postgres?schema=evolution&sslmode=require`
+   2. Preencha o `<project-id>` e a senha corretos.
+   3. No `.env`, ajuste `DATABASE_CONNECTION_URI` para essa string.
+4. **Subir novamente o docker**
+   - `docker-compose down`
+   - `docker-compose up -d`
+   - O log agora deve pular a etapa de migrations e iniciar o servidor em segundos.
+
+> ✅ Depois desse “baseline” manual, qualquer máquina (dev ou produção) consegue subir o Evolution API com o Supabase Free usando apenas o session pooler.
+
 ### Erro: "Cannot connect to Evolution API"
 
 - Verifique se o Docker está rodando: `docker ps`

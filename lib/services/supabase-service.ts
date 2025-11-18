@@ -9,6 +9,28 @@ import type { Instance, Contact, Conversation, Message, Product } from '@/types'
 
 const USE_MOCK = process.env.USE_MOCK_SUPABASE === 'true' || !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+/**
+ * Utilitário para logs estruturados
+ */
+function log(level: 'info' | 'warn' | 'error', message: string, context?: Record<string, any>) {
+  const timestamp = new Date().toISOString();
+  const logData = {
+    timestamp,
+    level,
+    service: 'SupabaseService',
+    message,
+    ...context,
+  };
+  
+  if (level === 'error') {
+    console.error(`[${timestamp}] [SupabaseService] [ERROR] ${message}`, context || '');
+  } else if (level === 'warn') {
+    console.warn(`[${timestamp}] [SupabaseService] [WARN] ${message}`, context || '');
+  } else {
+    console.log(`[${timestamp}] [SupabaseService] [INFO] ${message}`, context || '');
+  }
+}
+
 class SupabaseService {
   /**
    * Busca instância por nome
@@ -49,12 +71,62 @@ class SupabaseService {
   }
 
   /**
+   * Busca instância por accountId (primeira instância da conta)
+   */
+  async getInstanceByAccountId(accountId: string): Promise<Instance | null> {
+    if (USE_MOCK) {
+      log('info', 'Usando mock para buscar instância por accountId', { accountId });
+      return mockSupabaseService.getInstanceByAccountId?.(accountId) || null;
+    }
+
+    log('info', 'Buscando instância por accountId', { accountId });
+
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from('instances')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle();
+
+    if (error) {
+      log('error', 'Erro ao buscar instância por accountId', {
+        accountId,
+        error: error.message,
+        code: error.code,
+        details: error.details,
+      });
+      return null;
+    }
+
+    if (!data) {
+      log('info', 'Nenhuma instância encontrada para accountId', { accountId });
+      return null;
+    }
+
+    log('info', 'Instância encontrada por accountId', {
+      accountId,
+      instanceId: data.id,
+      instanceName: data.name,
+      status: data.status,
+    });
+
+    return data as Instance;
+  }
+
+  /**
    * Cria instância
    */
   async createInstance(data: Omit<Instance, 'id' | 'created_at' | 'updated_at'>): Promise<Instance> {
     if (USE_MOCK) {
+      log('info', 'Usando mock para criar instância', { accountId: data.account_id, instanceName: data.name });
       return mockSupabaseService.createInstance(data);
     }
+
+    log('info', 'Criando instância no Supabase', {
+      accountId: data.account_id,
+      instanceName: data.name,
+      status: data.status,
+    });
 
     const supabase = createServerSupabase();
     const { data: instance, error } = await supabase
@@ -68,8 +140,22 @@ class SupabaseService {
       .single();
 
     if (error || !instance) {
-      throw new Error(`Erro ao criar instância: ${error?.message}`);
+      log('error', 'Erro ao criar instância no Supabase', {
+        accountId: data.account_id,
+        instanceName: data.name,
+        error: error?.message || 'Instância não retornada',
+        code: error?.code,
+        details: error?.details,
+      });
+      throw new Error(`Erro ao criar instância: ${error?.message || 'Instância não retornada'}`);
     }
+
+    log('info', 'Instância criada com sucesso no Supabase', {
+      accountId: data.account_id,
+      instanceId: instance.id,
+      instanceName: instance.name,
+      status: instance.status,
+    });
 
     return instance as Instance;
   }

@@ -27,11 +27,15 @@ services:
       SERVER_URL: http://localhost:8080
       PORT: 8080
       
-      # API Key
-      API_KEY: ${EVOLUTION_API_KEY:-sua-chave-secreta}
+      # --- CORREÇÃO 1: Variável essencial para rodar no Docker ---
+      DOCKER_ENV: 'true'
       
-      # Webhook - URL do seu projeto Next.js
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:3000/api/webhook}
+      # API Key
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-sua-chave-secreta}
+      
+      # --- CORREÇÃO 2: Endereço correto para o Webhook (host.docker.internal) ---
+      # Isso permite que o container "veja" o seu Next.js rodando no Windows/Mac
+      WEBHOOK_URL: http://192.168.0.91:3001/api/webhook
       WEBHOOK_EVENTS: messages.upsert,connection.update,qrcode.update
       
       # Configurações do WhatsApp
@@ -47,14 +51,24 @@ services:
       CONFIG_SESSION_PHONE_CLIENT: Chrome
       CONFIG_SESSION_PHONE_NAME: Chrome
       
-      # Redis (opcional - para produção)
-      # REDIS_ENABLED: false
-      # REDIS_URI: redis://localhost:6379
+      # Redis (desabilitado)
+      REDIS_ENABLED: 'false'
       
-      # Database (opcional - para produção)
+      # Database
       DATABASE_ENABLED: 'true'
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI:-postgresql://evolution:evolution@postgres:5432/evolution}
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres:5432/evolution
+      
+      # Fixes para geração de QR Code
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      
+      # Versão do WhatsApp Web
+      CONFIG_SESSION_PHONE_VERSION: 2.3000.1015901307
+      
+    # DNS do Google
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
       
     volumes:
       - evolution_instances:/evolution/instances
@@ -62,6 +76,10 @@ services:
       
     networks:
       - evolution-network
+    
+    # --- ADICIONAL: Isso ajuda o host.docker.internal a funcionar no Linux, se necessário ---
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   evolution_instances:
@@ -71,4 +89,3 @@ volumes:
 networks:
   evolution-network:
     driver: bridge
-

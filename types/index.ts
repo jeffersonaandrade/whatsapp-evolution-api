@@ -66,6 +66,7 @@ export interface Instance {
   status: 'connected' | 'disconnected' | 'connecting';
   phone_number?: string;
   profile_pic_url?: string;
+  qr_code?: string; // QR Code em base64 recebido via webhook
   created_at: string;
   updated_at: string;
 }

@@ -168,9 +168,43 @@ async function handleConnectionUpdate(instanceName: string, state?: string) {
  * Processa atualização de QR Code
  */
 async function handleQRCodeUpdate(instanceName: string, qrcode?: any) {
-  // QR Code é atualizado via polling no frontend
-  // Aqui podemos apenas logar se necessário
-  console.log(`[Webhook] QR Code atualizado para instância: ${instanceName}`);
+  const instance = await supabaseService.getInstanceByName(instanceName);
+  
+  if (!instance) {
+    console.error(`[Webhook] Instância não encontrada: ${instanceName}`);
+    return;
+  }
+
+  // Extrai o QR Code do payload (pode vir em diferentes formatos)
+  let qrCodeBase64: string | null = null;
+  
+  if (typeof qrcode === 'string') {
+    qrCodeBase64 = qrcode;
+  } else if (qrcode?.base64) {
+    qrCodeBase64 = qrcode.base64;
+  } else if (qrcode?.code) {
+    qrCodeBase64 = qrcode.code;
+  } else if (qrcode?.qrcode) {
+    qrCodeBase64 = typeof qrcode.qrcode === 'string' ? qrcode.qrcode : qrcode.qrcode.base64 || qrcode.qrcode.code;
+  }
+
+  if (qrCodeBase64) {
+    // Salva o QR Code no banco de dados
+    await supabaseService.updateInstance(instance.id, {
+      qr_code: qrCodeBase64,
+      status: 'connecting', // Atualiza status para connecting quando recebe QR Code
+    });
+    
+    console.log(`[Webhook] QR Code salvo para instância: ${instanceName}`, {
+      hasQRCode: true,
+      qrCodeLength: qrCodeBase64.length,
+    });
+  } else {
+    console.warn(`[Webhook] QR Code recebido mas formato inválido para instância: ${instanceName}`, {
+      qrcodeType: typeof qrcode,
+      qrcodeKeys: qrcode ? Object.keys(qrcode) : [],
+    });
+  }
 }
 
 

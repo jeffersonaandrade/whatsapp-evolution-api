@@ -1,21 +1,25 @@
 # Guia: Configurar e Usar Evolution API com WhatsApp
 
-Este guia mostra como configurar e usar a Evolution API para conectar com WhatsApp Web.
+Este guia explica como configurar e testar a integração com o Evolution API para conectar WhatsApp, incluindo uso via frontend (Dashboard) e testes técnicos (cURL/Postman).
 
 ## 📋 Pré-requisitos
 
-- Docker e Docker Compose instalados
-- Node.js e npm instalados
-- Projeto Next.js rodando (já está funcionando! ✅)
+1. **Evolution API instalada e rodando**
+   - Docker: `docker-compose up -d` (usa `docker-compose.yml`)
+   - Ou instalação manual: [Documentação Evolution API](https://doc.evolution-api.com/)
+
+2. **URL e API Key do Evolution API**
+   - URL: geralmente `http://localhost:8080` (local) ou `https://seu-servidor.com` (produção)
+   - API Key: gerada na configuração do Evolution API
 
 ## 🚀 Passo 1: Configurar Variáveis de Ambiente
 
-Crie um arquivo `.env.local` na raiz do projeto:
+Adicione as seguintes variáveis no arquivo `.env.local`:
 
 ```env
 # Evolution API
 NEXT_PUBLIC_EVOLUTION_API_URL=http://localhost:8080
-EVOLUTION_API_KEY=sua-chave-secreta-aqui
+EVOLUTION_API_KEY=sua-api-key-aqui
 
 # Webhook (URL do seu projeto Next.js)
 WEBHOOK_URL=http://localhost:3000/api/webhook
@@ -29,26 +33,58 @@ USE_MOCK_SUPABASE=true
 # BRAIN_WEBHOOK_SECRET=sua-chave-secreta
 ```
 
-**Importante**: 
-- `EVOLUTION_API_KEY`: Use uma chave secreta forte (ex: `minha-chave-super-secreta-123`)
-- `WEBHOOK_SECRET`: Use outra chave secreta (ex: `webhook-secret-456`)
+**Importante:**
+- `NEXT_PUBLIC_EVOLUTION_API_URL`: URL pública do Evolution API (acessível pelo navegador)
+- `EVOLUTION_API_KEY`: Chave de API do Evolution API (apenas no servidor - **nunca exponha no frontend**)
 
-## 🐳 Passo 2: Iniciar Evolution API com Docker
+### 1.1. Verificar Configuração
 
-### 2.1. Iniciar o Container
+O sistema detecta automaticamente se o Evolution API está configurado:
 
-No terminal, na raiz do projeto, execute:
+- ✅ **Configurado**: Usa Evolution API real
+- ❌ **Não configurado**: Usa mock (para desenvolvimento)
+
+Você pode verificar isso nos logs do servidor:
+```bash
+[Evolution API] Usando Evolution API REAL
+# ou
+[Evolution API] Usando Evolution API MOCKADO
+```
+
+## 🐳 Passo 2: Iniciar Evolution API
+
+### Opção 1: Teste Local (Docker - Recomendado)
+
+**2.1. Iniciar Evolution API:**
 
 ```bash
 docker-compose up -d
 ```
 
-Isso vai:
-- Baixar a imagem da Evolution API
-- Iniciar o container na porta 8080
-- Configurar os webhooks automaticamente
+Ou, se preferir rodar diretamente sem docker-compose:
 
-### 2.2. Verificar se está rodando
+```bash
+docker run -d \
+  --name evolution-api \
+  -p 8080:8080 \
+  -e AUTHENTICATION_API_KEY=sua-api-key-aqui \
+  atendai/evolution-api:latest
+```
+
+**2.2. Configurar variáveis de ambiente:**
+
+```env
+NEXT_PUBLIC_EVOLUTION_API_URL=http://localhost:8080
+EVOLUTION_API_KEY=sua-api-key-aqui
+```
+
+**2.3. Reiniciar o servidor Next.js:**
+
+```bash
+npm run dev
+```
+
+**2.4. Verificar se está rodando:**
 
 ```bash
 docker ps
@@ -56,17 +92,57 @@ docker ps
 
 Você deve ver o container `evolution-api` rodando.
 
-### 2.3. Ver logs (opcional)
+**2.5. Ver logs (opcional):**
 
 ```bash
 docker-compose logs -f evolution-api
+# ou
+docker logs evolution-api -f
+```
+
+### Opção 2: Teste com Evolution API em Servidor
+
+Se você já tem a Evolution API rodando em outro servidor (ex: Render.com):
+
+**2.1. Configurar variáveis:**
+
+```env
+NEXT_PUBLIC_EVOLUTION_API_URL=https://seu-servidor-evolution.com
+EVOLUTION_API_KEY=sua-api-key-aqui
+```
+
+**2.2. Testar conexão:**
+
+```bash
+curl -X GET https://seu-servidor-evolution.com/instance/fetchInstances \
+  -H "apikey: sua-api-key-aqui"
 ```
 
 ## ✅ Passo 3: Testar a Conexão
 
-### 3.1. Verificar se Evolution API está respondendo
+### 3.1. Testar no Dashboard (Frontend)
 
-Abra no navegador ou use curl:
+1. **Acesse o Dashboard:**
+   ```
+   http://localhost:3000/dashboard
+   ```
+
+2. **Faça login** (se necessário)
+
+3. **Clique em "Conectar Agora"** ou botão equivalente
+
+4. **Escaneie o QR Code** com seu WhatsApp:
+   - Abra WhatsApp no celular
+   - Vá em **Configurações** > **Aparelhos conectados** > **Conectar um aparelho**
+   - Escaneie o QR Code exibido no dashboard
+
+5. **Aguarde a conexão:**
+   - O dashboard deve atualizar automaticamente mostrando "Conectado"
+   - O número do WhatsApp deve aparecer
+
+### 3.2. Testar via cURL (Backend/Técnico)
+
+**Verificar se Evolution API está respondendo:**
 
 ```bash
 curl http://localhost:8080
@@ -76,19 +152,108 @@ Ou acesse: http://localhost:8080
 
 Deve retornar informações da API.
 
-### 3.2. Testar criação de instância (via API do projeto)
-
-Com o servidor Next.js rodando (`npm run dev`), você pode testar criando uma instância:
+**Testar criação de instância (via rota de teste):**
 
 ```bash
-curl -X POST http://localhost:3000/api/instance/connect \
+curl -X POST http://localhost:3000/api/test/instance/connect \
   -H "Content-Type: application/json" \
   -d '{"instanceName": "minha-instancia-1"}'
 ```
 
-**Nota**: Esta rota requer autenticação. Por enquanto, vamos criar uma rota de teste sem autenticação.
+**Resposta esperada:**
+```json
+{
+  "success": true,
+  "qrCode": "data:image/png;base64,...",
+  "instanceName": "minha-instancia-1",
+  "instanceId": "instance-...",
+  "message": "Escaneie o QR Code com o WhatsApp"
+}
+```
 
-## 🔧 Passo 4: Criar Rota de Teste (Sem Autenticação)
+⚠️ **Nota:** As rotas `/api/test/*` são apenas para desenvolvimento. Em produção, use `/api/instance/*` com autenticação adequada.
+
+## 📡 Passo 4: Endpoints Utilizados
+
+O sistema usa os seguintes endpoints do Evolution API:
+
+### 4.1. Criar Instância
+
+```
+POST /instance/create
+Body: { instanceName: string, qrcode: true }
+```
+
+### 4.2. Conectar e Obter QR Code
+
+```
+GET /instance/connect/{instanceName}
+```
+
+### 4.3. Verificar Status
+
+```
+GET /instance/connectionState/{instanceName}
+```
+
+### 4.4. Desconectar
+
+```
+DELETE /instance/logout/{instanceName}
+```
+
+## 🧪 Passo 5: Teste Manual via cURL
+
+### 5.1. Criar Instância
+
+```bash
+curl -X POST http://localhost:8080/instance/create \
+  -H "Content-Type: application/json" \
+  -H "apikey: sua-api-key" \
+  -d '{
+    "instanceName": "teste-instance",
+    "qrcode": true
+  }'
+```
+
+### 5.2. Obter QR Code
+
+```bash
+curl -X GET http://localhost:8080/instance/connect/teste-instance \
+  -H "apikey: sua-api-key"
+```
+
+### 5.3. Verificar Status
+
+```bash
+curl -X GET http://localhost:8080/instance/connectionState/teste-instance \
+  -H "apikey: sua-api-key"
+```
+
+## 📱 Passo 6: Conectar WhatsApp (Frontend)
+
+### 6.1. Fluxo no Dashboard
+
+1. **Usuário clica em "Conectar"**
+   - Frontend chama `/api/instance/connect`
+   - Backend cria instância no Evolution API
+   - Backend obtém QR Code
+   - Backend salva instância no Supabase
+
+2. **QR Code é exibido**
+   - Usuário escaneia com WhatsApp
+   - Evolution API detecta conexão
+   - Webhook atualiza status no Supabase
+
+3. **Status é verificado**
+   - Frontend verifica status a cada 3 segundos
+   - Quando conectado, mostra número do WhatsApp
+
+### 6.2. Escanear QR Code
+
+1. Abra WhatsApp no celular
+2. Vá em **Configurações** > **Aparelhos conectados** > **Conectar um aparelho**
+3. Escaneie o QR Code retornado pela API
 
 Vamos criar uma rota de teste temporária para facilitar o desenvolvimento:
 
@@ -182,57 +347,22 @@ curl -X POST http://localhost:3000/api/test/instance/connect \
 }
 ```
 
-## 📱 Passo 5: Conectar WhatsApp
-
-### 5.1. Obter QR Code
-
-Use a rota de teste acima para obter o QR Code.
-
-### 5.2. Escanear QR Code
-
-1. Abra o WhatsApp no celular
-2. Vá em **Configurações** > **Aparelhos conectados** > **Conectar um aparelho**
-3. Escaneie o QR Code retornado pela API
-
-### 5.3. Verificar Status
+### 6.3. Verificar Status
 
 Após escanear, você pode verificar o status:
 
+**Via API de teste:**
 ```bash
-curl "http://localhost:3000/api/instance/status?instanceName=minha-instancia-1"
+curl "http://localhost:3000/api/test/instance/status?instanceName=minha-instancia-1"
 ```
 
-Ou criar uma rota de teste:
-
-```typescript
-// app/api/test/instance/status/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { evolutionAPI } from '@/lib/evolution-api';
-import { supabaseService } from '@/lib/services/supabase-service';
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const instanceName = searchParams.get('instanceName');
-
-  if (!instanceName) {
-    return NextResponse.json(
-      { error: 'instanceName é obrigatório' },
-      { status: 400 }
-    );
-  }
-
-  const instance = await supabaseService.getInstanceByName(instanceName);
-  const evolutionStatus = await evolutionAPI.getInstanceStatus(instanceName);
-
-  return NextResponse.json({
-    instance: instance || null,
-    evolutionState: evolutionStatus.data?.state,
-    status: instance?.status || 'not_found',
-  });
-}
+**Via Evolution API direto:**
+```bash
+curl -X GET http://localhost:8080/instance/connectionState/minha-instancia-1 \
+  -H "apikey: sua-api-key"
 ```
 
-## 🔔 Passo 6: Testar Webhook
+## 🔔 Passo 7: Testar Webhook
 
 ### 6.1. Enviar mensagem de teste
 
@@ -263,7 +393,7 @@ export async function GET() {
 }
 ```
 
-## 📝 Passo 7: Enviar Mensagem
+## 📝 Passo 8: Enviar Mensagem
 
 ### 7.1. Criar rota de teste para enviar mensagem
 
@@ -320,7 +450,7 @@ curl -X POST http://localhost:3000/api/test/message/send \
 
 **Nota**: Use o número completo com código do país (ex: `5511999999999` para Brasil).
 
-## 🛑 Passo 8: Parar Evolution API
+## 🛑 Passo 9: Parar Evolution API
 
 Quando não precisar mais:
 
@@ -334,7 +464,48 @@ Para parar e remover volumes (apaga dados):
 docker-compose down -v
 ```
 
+## 🔍 Debugging
+
+### Verificar Logs
+
+1. **Logs do Next.js:**
+
+```bash
+# No terminal onde o servidor está rodando
+# Procure por mensagens como:
+[Evolution API] Criando instância: instance-xxx
+[Evolution API] Erro ao criar instância: ...
+```
+
+2. **Logs do Evolution API:**
+
+```bash
+# Se estiver usando Docker
+docker logs evolution-api -f
+# ou
+docker-compose logs -f evolution-api
+```
+
 ## 🐛 Troubleshooting
+
+### Erros Comuns
+
+#### 1. "Erro ao criar instância"
+
+- ✅ Verifique se o Evolution API está rodando
+- ✅ Verifique se a URL está correta
+- ✅ Verifique se a API Key está correta
+
+#### 2. "QR Code não aparece"
+
+- ✅ Verifique os logs do Evolution API
+- ✅ Verifique se o endpoint `/instance/connect` está funcionando
+- ✅ Teste diretamente: `curl http://localhost:8080/instance/connect/teste`
+
+#### 3. "CORS Error"
+
+- ✅ Configure CORS no Evolution API
+- ✅ Ou use um proxy reverso (Nginx, etc.)
 
 ### Evolução API com Supabase (Session Pooler) travando em migrations
 
@@ -370,28 +541,43 @@ Quando usamos o Supabase no plano Free com o **session pooler** (`aws-*-pooler.s
 
 > ✅ Depois desse “baseline” manual, qualquer máquina (dev ou produção) consegue subir o Evolution API com o Supabase Free usando apenas o session pooler.
 
-### Erro: "Cannot connect to Evolution API"
+## 📝 Notas Importantes
 
-- Verifique se o Docker está rodando: `docker ps`
-- Verifique se o container está ativo: `docker-compose ps`
-- Verifique os logs: `docker-compose logs evolution-api`
+1. **Multi-tenancy**: Cada `account_id` tem sua própria instância
+   - Nome da instância: `instance-{accountId}`
+   - Exemplo: `instance-00000000-0000-0000-0000-000000000001`
 
-### Erro: "Invalid API Key"
+2. **Webhook**: Configure o webhook do Evolution API para:
+   - URL: `https://seu-dominio.com/api/webhook`
+   - Eventos: `messages.upsert`, `connection.update`, `qrcode.update`
 
-- Verifique se `EVOLUTION_API_KEY` no `.env.local` é igual ao `API_KEY` no `docker-compose.yml`
-- Reinicie o container: `docker-compose restart`
+3. **Segurança**: 
+   - Nunca exponha a `EVOLUTION_API_KEY` no frontend
+   - Use HTTPS em produção
+   - Configure CORS adequadamente
 
-### QR Code não aparece
+## 🔄 Fluxo Completo
 
-- Verifique se a Evolution API está respondendo: `curl http://localhost:8080`
-- Verifique os logs do container
-- Tente criar uma nova instância com outro nome
+1. **Usuário clica em "Conectar"**
+   - Frontend chama `/api/instance/connect`
+   - Backend cria instância no Evolution API
+   - Backend obtém QR Code
+   - Backend salva instância no Supabase
 
-### Webhook não recebe eventos
+2. **QR Code é exibido**
+   - Usuário escaneia com WhatsApp
+   - Evolution API detecta conexão
+   - Webhook atualiza status no Supabase
 
-- Verifique se `WEBHOOK_URL` no `docker-compose.yml` está correto
-- Verifique se o servidor Next.js está rodando
-- Verifique os logs do Next.js
+3. **Status é verificado**
+   - Frontend verifica status a cada 3 segundos
+   - Quando conectado, mostra número do WhatsApp
+
+## 📚 Recursos
+
+- [Documentação Evolution API](https://doc.evolution-api.com/)
+- [GitHub Evolution API](https://github.com/EvolutionAPI/evolution-api)
+- [Docker Hub](https://hub.docker.com/r/atendai/evolution-api)
 
 ## 📚 Próximos Passos
 
@@ -404,5 +590,9 @@ Quando usamos o Supabase no plano Free com o **session pooler** (`aws-*-pooler.s
 
 ## 🔒 Segurança
 
-⚠️ **IMPORTANTE**: As rotas de teste (`/api/test/*`) devem ser **removidas em produção** ou protegidas com autenticação adequada.
+⚠️ **IMPORTANTE**: 
+- As rotas de teste (`/api/test/*`) devem ser **removidas em produção** ou protegidas com autenticação adequada
+- Nunca exponha `EVOLUTION_API_KEY` no frontend
+- Use HTTPS em produção
+- Configure CORS adequadamente
 

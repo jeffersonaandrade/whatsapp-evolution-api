@@ -49,6 +49,18 @@ class MockSupabaseService {
   }
 
   /**
+   * Simula busca de instância por accountId
+   */
+  async getInstanceByAccountId(accountId: string): Promise<Instance | null> {
+    for (const instance of mockData.instances.values()) {
+      if (instance.account_id === accountId) {
+        return instance;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Simula criação de instância
    */
   async createInstance(data: Omit<Instance, 'id' | 'created_at' | 'updated_at'>): Promise<Instance> {

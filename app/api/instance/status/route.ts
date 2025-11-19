@@ -201,13 +201,14 @@ export async function GET(request: NextRequest) {
             });
 
             // Salva QR Code no banco
-            const { error: updateError } = await supabase
-              .from('instances')
-              .update({
-                qr_code: fetchedQRCode,
-                status: 'connecting',
-                updated_at: new Date().toISOString(),
-              })
+            const updateData: any = {
+              qr_code: fetchedQRCode,
+              status: 'connecting',
+              updated_at: new Date().toISOString(),
+            };
+            const { error: updateError } = await (supabase
+              .from('instances') as any)
+              .update(updateData)
               .eq('id', instance.id);
 
             if (updateError) {

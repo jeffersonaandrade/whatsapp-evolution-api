@@ -214,7 +214,10 @@ class EvolutionAPIClient {
         instanceName,
         error: result.error,
       });
-      return result;
+      return {
+        success: false,
+        error: result.error,
+      };
     }
 
     this.log('info', 'Instância criada com sucesso', {
@@ -243,7 +246,10 @@ class EvolutionAPIClient {
         instanceName,
         error: result.error,
       });
-      return result;
+      return {
+        success: false,
+        error: result.error,
+      };
     }
 
     // DEBUG: Log completo do payload bruto da Evolution API
@@ -346,7 +352,10 @@ class EvolutionAPIClient {
         instanceName,
         error: result.error,
       });
-      return result;
+      return {
+        success: false,
+        error: result.error,
+      };
     }
 
     const state = result.data?.state || 'close';

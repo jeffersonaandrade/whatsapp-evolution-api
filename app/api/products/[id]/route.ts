@@ -33,7 +33,10 @@ export async function PUT(
       .eq('id', user.id)
       .single();
 
-    if (userData?.account_id !== product.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (userAccountId !== product.account_id) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 
@@ -87,7 +90,10 @@ export async function DELETE(
       .eq('id', user.id)
       .single();
 
-    if (userData?.account_id !== product.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (userAccountId !== product.account_id) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 

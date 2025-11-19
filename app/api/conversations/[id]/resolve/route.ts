@@ -37,23 +37,32 @@ export async function PUT(
       .eq('id', user.id)
       .single();
 
+    // Type assertion necessário devido ao select do Supabase
+    const conversationData = conversation as any;
+    const instanceId = conversationData.instance_id;
+
     const { data: instance } = await supabase
       .from('instances')
       .select('account_id')
-      .eq('id', conversation.instance_id)
+      .eq('id', instanceId)
       .single();
 
-    if (userData?.account_id !== instance?.account_id) {
+    // Type assertions para evitar erros de tipagem do Supabase
+    const userAccountId = (userData as any)?.account_id;
+    const instanceAccountId = (instance as any)?.account_id;
+
+    if (userAccountId !== instanceAccountId) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 
     // Atualizar status da conversa
-    const { data: updatedConversation, error: updateError } = await supabase
-      .from('conversations')
-      .update({
-        status: 'resolved',
-        updated_at: new Date().toISOString(),
-      })
+    const updateData: any = {
+      status: 'resolved',
+      updated_at: new Date().toISOString(),
+    };
+    const { data: updatedConversation, error: updateError } = await (supabase
+      .from('conversations') as any)
+      .update(updateData)
       .eq('id', conversationId)
       .select()
       .single();

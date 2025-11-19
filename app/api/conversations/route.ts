@@ -25,7 +25,10 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!userData?.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (!userAccountId) {
       return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
     }
 
@@ -33,9 +36,9 @@ export async function GET(request: NextRequest) {
     const { data: instances } = await supabase
       .from('instances')
       .select('id')
-      .eq('account_id', userData.account_id);
+      .eq('account_id', userAccountId);
 
-    const instanceIds = instances?.map(i => i.id) || [];
+    const instanceIds = (instances as any[])?.map((i: any) => i.id) || [];
 
     if (instanceIds.length === 0) {
       return NextResponse.json({ conversations: [] });

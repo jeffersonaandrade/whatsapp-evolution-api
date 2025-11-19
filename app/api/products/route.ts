@@ -22,11 +22,14 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!userData?.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (!userAccountId) {
       return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
     }
 
-    const products = await productsService.getProducts(userData.account_id);
+    const products = await productsService.getProducts(userAccountId);
 
     return NextResponse.json({ products });
   } catch (error) {
@@ -67,12 +70,15 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!userData?.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (!userAccountId) {
       return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
     }
 
     const product = await productsService.createProduct({
-      account_id: userData.account_id,
+      account_id: userAccountId,
       name,
       description,
       price,

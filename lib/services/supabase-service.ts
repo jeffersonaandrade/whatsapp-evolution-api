@@ -103,14 +103,17 @@ class SupabaseService {
       return null;
     }
 
+    // Type assertion necessário devido ao select do Supabase
+    const instanceData = data as any;
+
     log('info', 'Instância encontrada por accountId', {
       accountId,
-      instanceId: data.id,
-      instanceName: data.name,
-      status: data.status,
+      instanceId: instanceData.id,
+      instanceName: instanceData.name,
+      status: instanceData.status,
     });
 
-    return data as Instance;
+    return instanceData as Instance;
   }
 
   /**
@@ -135,7 +138,7 @@ class SupabaseService {
         ...data,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -150,14 +153,17 @@ class SupabaseService {
       throw new Error(`Erro ao criar instância: ${error?.message || 'Instância não retornada'}`);
     }
 
+    // Type assertion necessário devido ao insert do Supabase
+    const instanceData = instance as any;
+
     log('info', 'Instância criada com sucesso no Supabase', {
       accountId: data.account_id,
-      instanceId: instance.id,
-      instanceName: instance.name,
-      status: instance.status,
+      instanceId: instanceData.id,
+      instanceName: instanceData.name,
+      status: instanceData.status,
     });
 
-    return instance as Instance;
+    return instanceData as Instance;
   }
 
   /**
@@ -169,12 +175,13 @@ class SupabaseService {
     }
 
     const supabase = createServerSupabase();
-    const { error } = await supabase
-      .from('instances')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+    const updateData: any = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase
+      .from('instances') as any)
+      .update(updateData)
       .eq('id', instanceId);
 
     return !error;
@@ -203,14 +210,17 @@ class SupabaseService {
       .single();
 
     if (existingContact) {
-      if (name && name !== existingContact.name) {
-        await supabase
-          .from('contacts')
-          .update({ name })
-          .eq('id', existingContact.id);
-        return { ...existingContact, name } as Contact;
+      // Type assertion necessário devido ao select do Supabase
+      const contactData = existingContact as any;
+      if (name && name !== contactData.name) {
+        const updateData: any = { name };
+        await (supabase
+          .from('contacts') as any)
+          .update(updateData)
+          .eq('id', contactData.id);
+        return { ...contactData, name } as Contact;
       }
-      return existingContact as Contact;
+      return contactData as Contact;
     }
 
     // Cria novo contato
@@ -221,7 +231,7 @@ class SupabaseService {
         phone_number: phoneNumber,
         name: name || null,
         created_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -270,7 +280,7 @@ class SupabaseService {
         bot_handoff_count: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -295,7 +305,7 @@ class SupabaseService {
       .insert({
         ...data,
         created_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -318,12 +328,13 @@ class SupabaseService {
     }
 
     const supabase = createServerSupabase();
-    const { error } = await supabase
-      .from('conversations')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+    const updateData: any = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase
+      .from('conversations') as any)
+      .update(updateData)
       .eq('id', conversationId);
 
     return !error;
@@ -350,7 +361,7 @@ class SupabaseService {
         .select('id')
         .eq('account_id', filters.accountId);
       
-      const instanceIds = instances?.map((i) => i.id) || [];
+      const instanceIds = (instances as any[])?.map((i: any) => i.id) || [];
       
       if (instanceIds.length === 0) {
         return [];
@@ -482,7 +493,7 @@ class SupabaseService {
         ...data,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -502,12 +513,13 @@ class SupabaseService {
     }
 
     const supabase = createServerSupabase();
-    const { error } = await supabase
-      .from('products')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+    const updateData: any = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase
+      .from('products') as any)
+      .update(updateData)
       .eq('id', productId);
 
     return !error;

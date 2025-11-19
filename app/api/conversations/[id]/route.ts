@@ -41,8 +41,11 @@ export async function GET(
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
+    // Type assertion necessário devido ao join no select anterior
+    const conversationData = conversation as any;
+
     return NextResponse.json({
-      ...conversation,
+      ...conversationData,
       messages: messages || [],
     });
   } catch (error) {

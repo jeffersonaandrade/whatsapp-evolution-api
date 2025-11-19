@@ -28,7 +28,10 @@ export async function DELETE(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!userData?.account_id) {
+    // Type assertion necessário devido ao select do Supabase
+    const userAccountId = (userData as any)?.account_id;
+
+    if (!userAccountId) {
       return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
     }
 
@@ -36,12 +39,15 @@ export async function DELETE(request: NextRequest) {
       .from('instances')
       .select('*')
       .eq('name', instanceName)
-      .eq('account_id', userData.account_id)
+      .eq('account_id', userAccountId)
       .single();
 
     if (!instance) {
       return NextResponse.json({ error: 'Instância não encontrada' }, { status: 404 });
     }
+
+    // Type assertion necessário devido ao select do Supabase
+    const instanceData = instance as any;
 
     // Desconectar na Evolution API
     const result = await evolutionAPI.logoutInstance(instanceName);
@@ -54,13 +60,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Atualizar status no Supabase
-    await supabase
-      .from('instances')
-      .update({
-        status: 'disconnected',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', instance.id);
+    const updateData: any = {
+      status: 'disconnected',
+      updated_at: new Date().toISOString(),
+    };
+    await (supabase
+      .from('instances') as any)
+      .update(updateData)
+      .eq('id', instanceData.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

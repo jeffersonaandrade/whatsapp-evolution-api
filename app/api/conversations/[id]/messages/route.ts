@@ -47,19 +47,27 @@ export async function POST(
       .eq('id', user.id)
       .single();
 
+    // Type assertion necessário devido ao join no select anterior
+    const conversationData = conversation as any;
+    const instanceId = conversationData.instance_id;
+
     const { data: instance } = await supabase
       .from('instances')
       .select('account_id')
-      .eq('id', conversation.instance_id)
+      .eq('id', instanceId)
       .single();
 
-    if (userData?.account_id !== instance?.account_id) {
+    // Type assertions para evitar erros de tipagem do Supabase
+    const userAccountId = (userData as any)?.account_id;
+    const instanceAccountId = (instance as any)?.account_id;
+
+    if (userAccountId !== instanceAccountId) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 
     // Enviar mensagem via Evolution API
-    const contact = conversation.contact;
-    const instanceData = conversation.instance;
+    const contact = conversationData.contact;
+    const instanceData = conversationData.instance;
     
     if (!contact?.phone_number || !instanceData?.name) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
@@ -87,7 +95,7 @@ export async function POST(
         sent_by: 'agent',
         agent_id: user.id,
         created_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -96,8 +104,8 @@ export async function POST(
     }
 
     // Atualizar última mensagem da conversa
-    await supabase
-      .from('conversations')
+    await (supabase
+      .from('conversations') as any)
       .update({
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

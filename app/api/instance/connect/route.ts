@@ -2,27 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase';
 import { evolutionAPI } from '@/lib/evolution-api';
 import { getAuthenticatedUser } from '@/lib/auth';
-
-/**
- * Utilitário para logs estruturados
- */
-function log(level: 'info' | 'warn' | 'error', message: string, context?: Record<string, any>) {
-  const timestamp = new Date().toISOString();
-  const logData = {
-    timestamp,
-    level,
-    message,
-    ...context,
-  };
-  
-  if (level === 'error') {
-    console.error(`[${timestamp}] [ERROR] ${message}`, context || '');
-  } else if (level === 'warn') {
-    console.warn(`[${timestamp}] [WARN] ${message}`, context || '');
-  } else {
-    console.log(`[${timestamp}] [INFO] ${message}`, context || '');
-  }
-}
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Conectar instância WhatsApp
@@ -32,20 +12,21 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    log('info', 'Iniciando conexão de instância WhatsApp', { requestId });
+    logger.info('[Instance/Connect] Iniciando conexão de instância WhatsApp', { requestId });
 
     // Verificar autenticação via cookies
+    logger.debug('[Instance/Connect] Verificando autenticação', { requestId });
     const user = await getAuthenticatedUser(request);
     
     if (!user || !user.accountId) {
-      log('warn', 'Tentativa de conexão sem autenticação', { requestId });
+      logger.warn('[Instance/Connect] Tentativa de conexão sem autenticação', { requestId });
       return NextResponse.json(
         { error: 'Não autenticado', requestId },
         { status: 401 }
       );
     }
 
-    log('info', 'Usuário autenticado', {
+    logger.info('[Instance/Connect] Usuário autenticado', {
       requestId,
       userId: user.id,
       accountId: user.accountId,
@@ -56,7 +37,7 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch (parseError) {
-      log('error', 'Erro ao fazer parse do body da requisição', {
+      logger.error('[Instance/Connect] Erro ao fazer parse do body da requisição', parseError, {
         requestId,
         accountId: user.accountId,
         error: parseError instanceof Error ? parseError.message : 'Erro desconhecido',
@@ -73,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // REGRA DE NEGÓCIO: Cada usuário tem APENAS UMA instância
     // SEMPRE buscar primeiro no Supabase para reutilizar a instância existente
-    log('info', 'Buscando instância existente no Supabase', {
+    logger.info('[Instance/Connect] Buscando instância existente no Supabase', {
       requestId,
       accountId: user.accountId,
     });
@@ -85,7 +66,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (queryError) {
-      log('error', 'Erro ao buscar instância no Supabase', {
+      logger.error('[Instance/Connect] Erro ao buscar instância no Supabase', queryError, {
         requestId,
         accountId: user.accountId,
         error: queryError.message,
@@ -105,7 +86,7 @@ export async function POST(request: NextRequest) {
       // Usar o instanceName existente (ignorar o fornecido no body, se houver)
       const instanceName = instanceData.name;
       
-      log('info', 'Instância existente encontrada - REUTILIZANDO', {
+      logger.info('[Instance/Connect] Instância existente encontrada - REUTILIZANDO', {
         requestId,
         accountId: user.accountId,
         instanceId: instanceData.id,
@@ -115,21 +96,21 @@ export async function POST(request: NextRequest) {
       });
 
       // Verificar status na Evolution API
-      log('info', 'Verificando status na Evolution API', {
+      logger.info('[Instance/Connect] Verificando status na Evolution API', {
         requestId,
         instanceName: instanceData.name,
       });
 
       const evolutionStatus = await evolutionAPI.getInstanceStatus(instanceData.name);
 
-      // Se a instância não existe na Evolution API (404), criar uma nova
+      // Se a instância não existe na Evolution API (404) criar uma nova
       if (!evolutionStatus.success) {
         const isNotFound = evolutionStatus.error?.includes('404') || 
                           evolutionStatus.error?.includes('Not Found') ||
                           evolutionStatus.error?.includes('not found');
         
         if (isNotFound) {
-          log('warn', 'Instância existe no Supabase mas não na Evolution API, criando nova', {
+          logger.warn('[Instance/Connect] 'Instância existe no Supabase mas não na Evolution API, criando nova', {
             requestId,
             instanceName: instanceData.name,
             error: evolutionStatus.error,
@@ -141,14 +122,14 @@ export async function POST(request: NextRequest) {
             .delete()
             .eq('id', instanceData.id);
 
-          log('info', 'Instância removida do Supabase, será criada nova', {
+          logger.info('[Instance/Connect] 'Instância removida do Supabase, será criada nova', {
             requestId,
             instanceName: instanceData.name,
           });
 
           // Continuar o fluxo para criar nova instância (cai no bloco "Se não existe")
         } else {
-          log('error', 'Erro ao verificar status na Evolution API', {
+          logger.error('[Instance/Connect] 'Erro ao verificar status na Evolution API', {
             requestId,
             instanceName: instanceData.name,
             error: evolutionStatus.error,
@@ -160,7 +141,7 @@ export async function POST(request: NextRequest) {
         }
       } else {
         const evolutionState = evolutionStatus.data?.state || 'unknown';
-        log('info', 'Status da Evolution API obtido', {
+        logger.info('[Instance/Connect] 'Status da Evolution API obtido', {
           requestId,
           instanceName: instanceData.name,
           evolutionState,
@@ -168,7 +149,7 @@ export async function POST(request: NextRequest) {
 
         // Se a instância está desconectada, obter novo QR Code
         if (evolutionState === 'close' || !evolutionState) {
-          log('info', 'Instância desconectada, obtendo novo QR Code', {
+          logger.info('[Instance/Connect] 'Instância desconectada, obtendo novo QR Code', {
             requestId,
             instanceName: instanceData.name,
           });
@@ -182,7 +163,7 @@ export async function POST(request: NextRequest) {
                               connectResult.error?.includes('not found');
             
             if (isNotFound) {
-              log('warn', 'Instância não existe na Evolution API, criando nova', {
+              logger.warn('[Instance/Connect] 'Instância não existe na Evolution API, criando nova', {
                 requestId,
                 instanceName: instanceData.name,
               });
@@ -193,14 +174,14 @@ export async function POST(request: NextRequest) {
                 .delete()
                 .eq('id', instanceData.id);
 
-              log('info', 'Instância removida do Supabase, será criada nova', {
+              logger.info('[Instance/Connect] 'Instância removida do Supabase, será criada nova', {
                 requestId,
                 instanceName: instanceData.name,
               });
 
               // Continuar o fluxo para criar nova instância (cai no bloco "Se não existe")
             } else {
-              log('error', 'Erro ao obter QR Code da instância desconectada', {
+              logger.error('[Instance/Connect] 'Erro ao obter QR Code da instância desconectada', {
                 requestId,
                 instanceName: instanceData.name,
                 error: connectResult.error,
@@ -215,7 +196,7 @@ export async function POST(request: NextRequest) {
             const qrCode = connectResult.data?.base64 || connectResult.data?.code;
             
             if (!qrCode) {
-              log('warn', 'QR Code não retornado pela Evolution API - pode estar sendo enviado via webhook', {
+              logger.warn('[Instance/Connect] 'QR Code não retornado pela Evolution API - pode estar sendo enviado via webhook', {
                 requestId,
                 instanceName: instanceData.name,
                 hint: 'O QR Code pode ser enviado via webhook qrcode.update. Verifique o webhook.',
@@ -236,7 +217,7 @@ export async function POST(request: NextRequest) {
             // Atualizar status no banco para 'connecting'
             const updateData: any = {
               status: 'connecting',
-              updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             };
             const { error: updateError } = await (supabase
               .from('instances') as any)
@@ -244,7 +225,7 @@ export async function POST(request: NextRequest) {
               .eq('id', instanceData.id);
 
             if (updateError) {
-              log('error', 'Erro ao atualizar status da instância no Supabase', {
+              logger.error('[Instance/Connect] 'Erro ao atualizar status da instância no Supabase', {
                 requestId,
                 instanceId: instanceData.id,
                 error: updateError.message,
@@ -253,7 +234,7 @@ export async function POST(request: NextRequest) {
             }
 
             const duration = Date.now() - startTime;
-            log('info', 'QR Code obtido com sucesso (instância existente)', {
+            logger.info('[Instance/Connect] 'QR Code obtido com sucesso (instância existente)', {
               requestId,
               accountId: user.accountId,
               instanceId: instanceData.id,
@@ -276,7 +257,7 @@ export async function POST(request: NextRequest) {
 
         // Se já está conectada, retorna sucesso sem QR Code
         const duration = Date.now() - startTime;
-        log('info', 'Instância já está conectada', {
+        logger.info('[Instance/Connect] 'Instância já está conectada', {
           requestId,
           accountId: user.accountId,
           instanceId: instanceData.id,
@@ -303,7 +284,7 @@ export async function POST(request: NextRequest) {
     // Formato: instance-{account_id} (sem hífens)
     const instanceName = providedInstanceName || `instance-${user.accountId.replace(/-/g, '')}`;
     
-    log('info', 'Nenhuma instância encontrada no Supabase, criando nova', {
+    logger.info('[Instance/Connect] 'Nenhuma instância encontrada no Supabase, criando nova', {
       requestId,
       accountId: user.accountId,
       instanceName,
@@ -313,7 +294,7 @@ export async function POST(request: NextRequest) {
     const createResult = await evolutionAPI.createInstance(instanceName);
 
     if (!createResult.success) {
-      // Se der erro 403 (Forbidden), a instância já existe na Evolution API
+      // Se der erro 403 (Forbidden) a instância já existe na Evolution API
       // Mas não existe no Supabase - isso pode acontecer se o banco foi limpo
       const isForbidden = 
         createResult.error?.includes('403') || 
@@ -321,7 +302,7 @@ export async function POST(request: NextRequest) {
         createResult.error?.includes('(403)');
       
       if (isForbidden) {
-        log('warn', 'Erro 403 - instância já existe na Evolution API mas não no Supabase, tentando obter QR Code', {
+        logger.warn('[Instance/Connect] 'Erro 403 - instância já existe na Evolution API mas não no Supabase, tentando obter QR Code', {
           requestId,
           accountId: user.accountId,
           instanceName,
@@ -333,7 +314,7 @@ export async function POST(request: NextRequest) {
         
         if (connectResult.success) {
           // Instância existe na Evolution API, salvar no Supabase (INSERT - primeira vez)
-          log('info', 'Instância existe na Evolution API, salvando no Supabase', {
+          logger.info('[Instance/Connect] 'Instância existe na Evolution API, salvando no Supabase', {
             requestId,
             accountId: user.accountId,
             instanceName,
@@ -345,14 +326,14 @@ export async function POST(request: NextRequest) {
               account_id: user.accountId,
               name: instanceName,
               status: 'connecting',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+              updated_at: new Date().toISOString()
             } as any)
             .select()
             .single();
 
           if (dbError || !instance) {
-            log('error', 'Erro ao salvar instância no Supabase', {
+            logger.error('[Instance/Connect] 'Erro ao salvar instância no Supabase', {
               requestId,
               accountId: user.accountId,
               instanceName,
@@ -370,7 +351,7 @@ export async function POST(request: NextRequest) {
           const qrCode = connectResult.data?.base64 || connectResult.data?.code;
           const duration = Date.now() - startTime;
           
-          log('info', 'Instância recuperada da Evolution API e salva no Supabase', {
+          logger.info('[Instance/Connect] 'Instância recuperada da Evolution API e salva no Supabase', {
             requestId,
             accountId: user.accountId,
             instanceId: instanceData.id,
@@ -388,7 +369,7 @@ export async function POST(request: NextRequest) {
             requestId,
           });
         } else {
-          log('error', 'Erro ao obter QR Code da instância existente na Evolution API', {
+          logger.error('[Instance/Connect] 'Erro ao obter QR Code da instância existente na Evolution API', {
             requestId,
             accountId: user.accountId,
             instanceName,
@@ -400,7 +381,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        log('error', 'Erro ao criar instância na Evolution API', {
+        logger.error('[Instance/Connect] 'Erro ao criar instância na Evolution API', {
           requestId,
           accountId: user.accountId,
           instanceName,
@@ -413,15 +394,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    log('info', 'Instância criada na Evolution API', {
+    logger.info('[Instance/Connect] 'Instância criada na Evolution API', {
       requestId,
       accountId: user.accountId,
       instanceName,
-      hasQRCode: !!(createResult.data?.base64 || createResult.data?.code),
+      hasQRCode: !!(createResult.data?.base64 || createResult.data?.code)
     });
 
     // Salvar instância no Supabase
-    log('info', 'Salvando instância no Supabase', {
+    logger.info('[Instance/Connect] 'Salvando instância no Supabase', {
       requestId,
       accountId: user.accountId,
       instanceName,
@@ -433,14 +414,14 @@ export async function POST(request: NextRequest) {
         account_id: user.accountId,
         name: instanceName,
         status: 'connecting',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+        updated_at: new Date().toISOString()
       } as any)
       .select()
       .single();
 
     if (dbError || !instance) {
-      log('error', 'Erro ao salvar instância no Supabase', {
+      logger.error('[Instance/Connect] 'Erro ao salvar instância no Supabase', {
         requestId,
         accountId: user.accountId,
         instanceName,
@@ -450,14 +431,14 @@ export async function POST(request: NextRequest) {
       });
 
       // Tenta deletar a instância na Evolution API
-      log('info', 'Tentando deletar instância na Evolution API após erro no Supabase', {
+      logger.info('[Instance/Connect] 'Tentando deletar instância na Evolution API após erro no Supabase', {
         requestId,
         instanceName,
       });
 
       const deleteResult = await evolutionAPI.deleteInstance(instanceName);
       if (!deleteResult.success) {
-        log('error', 'Erro ao deletar instância na Evolution API após falha no Supabase', {
+        logger.error('[Instance/Connect] 'Erro ao deletar instância na Evolution API após falha no Supabase', {
           requestId,
           instanceName,
           error: deleteResult.error,
@@ -473,7 +454,7 @@ export async function POST(request: NextRequest) {
     // Type assertion necessário devido ao insert do Supabase
     const instanceData = instance as any;
 
-    log('info', 'Instância salva no Supabase', {
+    logger.info('[Instance/Connect] 'Instância salva no Supabase', {
       requestId,
       accountId: user.accountId,
       instanceId: instanceData.id,
@@ -485,7 +466,7 @@ export async function POST(request: NextRequest) {
     
     // Se não veio QR Code na criação, tenta obter via connect
     if (!qrCode) {
-      log('info', 'QR Code não veio na criação, tentando obter via connect', {
+      logger.info('[Instance/Connect] 'QR Code não veio na criação, tentando obter via connect', {
         requestId,
         instanceName,
       });
@@ -493,13 +474,13 @@ export async function POST(request: NextRequest) {
       const connectResult = await evolutionAPI.connectInstance(instanceName);
       if (connectResult.success) {
         qrCode = connectResult.data?.base64 || connectResult.data?.code;
-        log('info', 'QR Code obtido via connect', {
+        logger.info('[Instance/Connect] 'QR Code obtido via connect', {
           requestId,
           instanceName,
           hasQRCode: !!qrCode,
         });
       } else {
-        log('warn', 'Não foi possível obter QR Code via connect', {
+        logger.warn('[Instance/Connect] 'Não foi possível obter QR Code via connect', {
           requestId,
           instanceName,
           error: connectResult.error,
@@ -508,7 +489,7 @@ export async function POST(request: NextRequest) {
     }
 
     const duration = Date.now() - startTime;
-    log('info', 'Conexão de instância concluída com sucesso', {
+    logger.info('[Instance/Connect] 'Conexão de instância concluída com sucesso', {
       requestId,
       accountId: user.accountId,
       instanceId: instanceData.id,
@@ -527,11 +508,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
-    log('error', 'Erro inesperado ao conectar instância', {
+    logger.error('[Instance/Connect] Erro inesperado ao conectar instância', error, {
       requestId,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
-      stack: error instanceof Error ? error.stack : undefined,
       duration: `${duration}ms`,
+      errorStep: 'unexpected_error',
     });
 
     return NextResponse.json(

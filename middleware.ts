@@ -12,18 +12,24 @@ export function middleware(request: NextRequest) {
   }
 
   // Obter origem permitida do env ou usar padrão
+  // Normaliza a URL removendo barra no final para comparação mais robusta
+  const normalizeUrl = (url: string) => url.replace(/\/+$/, '');
+  
   const allowedOrigin = 
-    process.env.NEXT_PUBLIC_FRONTEND_URL || 
-    process.env.FRONTEND_URL || 
-    'http://localhost:3000';
+    normalizeUrl(
+      process.env.NEXT_PUBLIC_FRONTEND_URL || 
+      process.env.FRONTEND_URL || 
+      'http://localhost:3000'
+    );
 
   // Obter origem da requisição
   const origin = request.headers.get('origin');
+  const normalizedOrigin = origin ? normalizeUrl(origin) : null;
 
   // Verificar se a origem é permitida
   const isOriginAllowed = 
     !origin || // Permitir requisições sem origin (ex: Postman, curl)
-    origin === allowedOrigin ||
+    normalizedOrigin === allowedOrigin ||
     (process.env.NODE_ENV === 'development' && origin?.startsWith('http://localhost'));
 
   // Headers CORS

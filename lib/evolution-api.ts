@@ -68,9 +68,9 @@ class EvolutionAPIClient {
         ...options.headers,
       };
 
-      // Timeout de 30 segundos para requisições externas
+      // Timeout de 90 segundos para requisições externas (createInstance pode demorar +20s no Render)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 segundos
 
       let response: Response;
       try {
@@ -91,12 +91,12 @@ class EvolutionAPIClient {
             method,
             endpoint,
             url,
-            timeout: '30s',
+            timeout: '90s',
             duration: `${Date.now() - startTime}ms`,
           });
           return {
             success: false,
-            error: 'Timeout na requisição (30s)',
+            error: 'Timeout na requisição (90s)',
           };
         }
         

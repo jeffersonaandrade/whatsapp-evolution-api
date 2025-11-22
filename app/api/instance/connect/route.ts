@@ -95,6 +95,29 @@ export async function POST(request: NextRequest) {
         providedInstanceName: providedInstanceName || null,
       });
 
+      // OTIMIZAÇÃO: Se já está conectada, retornar imediatamente sem chamar Evolution API
+      if (instanceData.status === 'connected' && instanceData.phone_number) {
+        const duration = Date.now() - startTime;
+        logger.info('[Instance/Connect] Instância já conectada - retornando imediatamente', {
+          requestId,
+          accountId: user.accountId,
+          instanceId: instanceData.id,
+          instanceName,
+          duration: `${duration}ms`,
+        });
+
+        return NextResponse.json({
+          success: true,
+          qrCode: null,
+          instanceName,
+          instanceId: instanceData.id,
+          status: 'connected',
+          phoneNumber: instanceData.phone_number,
+          message: 'Instância já está conectada',
+          requestId,
+        });
+      }
+
       // Verificar status na Evolution API
       logger.info('[Instance/Connect] Verificando status na Evolution API', {
         requestId,

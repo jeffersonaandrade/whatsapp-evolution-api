@@ -14,15 +14,21 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('[Webhook] Recebendo webhook da Evolution API', { requestId });
 
-    // Validação de webhook desabilitada por enquanto para facilitar testes
-    // TODO: Habilitar validação em produção
-    // const webhookSecret = process.env.WEBHOOK_SECRET;
-    // if (webhookSecret) {
-    //   const authHeader = request.headers.get('authorization');
-    //   if (authHeader !== `Bearer ${webhookSecret}`) {
-    //     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    //   }
-    // }
+    // Validação de webhook (HMAC ou Bearer token)
+    const webhookSecret = process.env.WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const authHeader = request.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        logger.warn('[Webhook] Tentativa de acesso sem autorização', { requestId });
+        return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      }
+
+      const token = authHeader.replace('Bearer ', '');
+      if (token !== webhookSecret) {
+        logger.warn('[Webhook] Token inválido', { requestId });
+        return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      }
+    }
 
     logger.debug('[Webhook] Fazendo parse do body', { requestId });
     const body: EvolutionAPIWebhook = await request.json();

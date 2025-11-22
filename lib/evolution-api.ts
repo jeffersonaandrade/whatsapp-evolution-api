@@ -68,10 +68,41 @@ class EvolutionAPIClient {
         ...options.headers,
       };
 
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+      // Timeout de 30 segundos para requisições externas
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Verificar se foi timeout
+        if (fetchError?.name === 'AbortError') {
+          this.log('error', 'Timeout na requisição para Evolution API', {
+            requestId,
+            method,
+            endpoint,
+            url,
+            timeout: '30s',
+            duration: `${Date.now() - startTime}ms`,
+          });
+          return {
+            success: false,
+            error: 'Timeout na requisição (30s)',
+          };
+        }
+        
+        // Re-throw outros erros para serem tratados pelo catch externo
+        throw fetchError;
+      }
 
       const duration = Date.now() - startTime;
 

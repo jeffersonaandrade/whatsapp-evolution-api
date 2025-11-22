@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { addSecurityHeaders } from '@/lib/utils/security';
+import { checkRateLimit, getRateLimitKey } from '@/lib/utils/rate-limit';
 
 /**
- * Middleware para configurar CORS
- * Permite que o frontend (porta 3000) se comunique com o backend (porta 3001)
- * com suporte a cookies (credentials)
+ * Middleware para configurar CORS, segurança e rate limiting
  */
 export function middleware(request: NextRequest) {
-  // Apenas aplicar CORS nas rotas de API
+  // Apenas aplicar nas rotas de API
   if (!request.nextUrl.pathname.startsWith('/api')) {
     return NextResponse.next();
   }
@@ -61,12 +61,44 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  // Para outras requisições, adicionar headers CORS na resposta
+  // Rate limiting (exceto health check)
+  if (!request.nextUrl.pathname.includes('/health')) {
+    const rateLimitKey = getRateLimitKey(request as any, undefined);
+    const rateLimitResult = checkRateLimit(rateLimitKey, {
+      windowMs: 60000, // 1 minuto
+      maxRequests: 100, // 100 requisições por minuto
+    });
+
+    if (!rateLimitResult.allowed) {
+      const response = new NextResponse(
+        JSON.stringify({
+          error: 'Muitas requisições. Tente novamente mais tarde.',
+          retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
+        }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } }
+      );
+      
+      response.headers.set('Retry-After', Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString());
+      
+      // Aplicar CORS e headers de segurança mesmo em rate limit
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+      addSecurityHeaders(response);
+      
+      return response;
+    }
+  }
+
+  // Para outras requisições, adicionar headers CORS e de segurança
   const response = NextResponse.next();
   
   Object.entries(corsHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
+
+  // Aplicar headers de segurança
+  addSecurityHeaders(response);
 
   return response;
 }

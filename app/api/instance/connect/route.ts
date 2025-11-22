@@ -14,14 +14,35 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('[Instance/Connect] Iniciando conexão de instância WhatsApp', { requestId });
 
+    // Debug: Log headers relevantes
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const cookieHeader = request.headers.get('cookie');
+    logger.debug('[Instance/Connect] Headers da requisição', {
+      requestId,
+      origin,
+      referer,
+      hasCookieHeader: !!cookieHeader,
+      cookieHeaderLength: cookieHeader?.length || 0,
+      cookieHeaderPreview: cookieHeader ? cookieHeader.substring(0, 200) : null,
+      allCookiesCount: request.cookies.getAll().length,
+      allCookieNames: request.cookies.getAll().map(c => c.name),
+    });
+
     // Verificar autenticação via cookies
     logger.debug('[Instance/Connect] Verificando autenticação', { requestId });
     const user = await getAuthenticatedUser(request);
     
     if (!user || !user.accountId) {
-      logger.warn('[Instance/Connect] Tentativa de conexão sem autenticação', { requestId });
+      logger.warn('[Instance/Connect] Tentativa de conexão sem autenticação', { 
+        requestId,
+        hasUser: !!user,
+        hasAccountId: user ? !!user.accountId : false,
+        origin,
+        referer,
+      });
       return NextResponse.json(
-        { error: 'Não autenticado', requestId },
+        { error: 'Não autenticado', requestId, details: 'Cookie de autenticação não encontrado ou inválido' },
         { status: 401 }
       );
     }

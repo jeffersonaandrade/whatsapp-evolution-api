@@ -36,21 +36,20 @@ export async function getAuthenticatedUser(
       // Log todos os cookies disponíveis para debug
       const allCookies = request.cookies.getAll();
       const cookieNames = allCookies.map(c => c.name);
+      const cookieHeader = request.headers.get('cookie');
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AUTH] Nenhum cookie de usuário encontrado', {
-          timestamp: new Date().toISOString(),
-          availableCookies: cookieNames,
-          searchedCookies: cookieNames,
-        });
-      } else {
-        // Em produção, log apenas se não houver cookies
-        if (cookieNames.length === 0) {
-          console.warn('[AUTH] Nenhum cookie encontrado na requisição', {
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
+      // Log detalhado para debug
+      console.warn('[AUTH] Nenhum cookie de usuário encontrado', {
+        timestamp: new Date().toISOString(),
+        availableCookies: cookieNames,
+        searchedCookies: ['user', 'auth', 'auth-user', 'session', 'user_session'],
+        cookieHeaderExists: !!cookieHeader,
+        cookieHeaderLength: cookieHeader?.length || 0,
+        cookieHeaderPreview: cookieHeader ? cookieHeader.substring(0, 200) : null,
+        origin: request.headers.get('origin'),
+        referer: request.headers.get('referer'),
+      });
+      
       return null;
     }
 

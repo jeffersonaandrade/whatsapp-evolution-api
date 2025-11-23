@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedSupabase } from '@/lib/supabase';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { supabaseService } from '@/lib/services/supabase-service';
 
 /**
  * Obter conversa por ID
@@ -9,43 +10,31 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = await createAuthenticatedSupabase();
-    
-    // Verificar autenticação
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const user = await getAuthenticatedUser(request);
+    if (!user?.accountId) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     }
 
     const conversationId = params.id;
 
-    // Buscar conversa com relacionamentos
-    const { data: conversation, error } = await supabase
-      .from('conversations')
-      .select(`
-        *,
-        contact:contacts(*),
-        instance:instances(*)
-      `)
-      .eq('id', conversationId)
-      .single();
+    // Buscar conversa
+    const conversation = await supabaseService.getConversationById(conversationId);
 
-    if (error || !conversation) {
+    if (!conversation) {
       return NextResponse.json({ error: 'Conversa não encontrada' }, { status: 404 });
     }
 
-    // Buscar mensagens
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
-
-    // Type assertion necessário devido ao join no select anterior
-    const conversationData = conversation as any;
+    // Buscar relações e mensagens
+    const [contact, instance, messages] = await Promise.all([
+      supabaseService.getContactById(conversation.contact_id),
+      supabaseService.getInstanceById(conversation.instance_id),
+      supabaseService.getMessagesByConversation(conversationId),
+    ]);
 
     return NextResponse.json({
-      ...conversationData,
+      ...conversation,
+      contact: contact || null,
+      instance: instance || null,
       messages: messages || [],
     });
   } catch (error) {

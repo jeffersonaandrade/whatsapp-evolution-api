@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedSupabase } from '@/lib/supabase';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { supabaseService } from '@/lib/services/supabase-service';
 
 /**
  * Listar conversas
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createAuthenticatedSupabase();
-    
-    // Verificar autenticação
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const user = await getAuthenticatedUser(request);
+    if (!user?.accountId) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     }
 
@@ -18,62 +16,29 @@ export async function GET(request: NextRequest) {
     const instanceId = searchParams.get('instanceId');
     const status = searchParams.get('status');
 
-    // Buscar account_id do usuário
-    const { data: userData } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', user.id)
-      .single();
+    // Buscar conversas via SQLite com filtros
+    const conversations = await supabaseService.getConversations({
+      accountId: user.accountId,
+      instanceId: instanceId || undefined,
+      status: status || undefined,
+    });
 
-    // Type assertion necessário devido ao select do Supabase
-    const userAccountId = (userData as any)?.account_id;
+    // Enriquecer com contact e instance (para manter compatibilidade)
+    const conversationsWithRelations = await Promise.all(
+      conversations.map(async (c: any) => {
+        const [contact, instance] = await Promise.all([
+          supabaseService.getContactById(c.contact_id),
+          supabaseService.getInstanceById(c.instance_id),
+        ]);
+        return {
+          ...c,
+          contact: contact || null,
+          instance: instance || null,
+        };
+      })
+    );
 
-    if (!userAccountId) {
-      return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
-    }
-
-    // Buscar instâncias do usuário
-    const { data: instances } = await supabase
-      .from('instances')
-      .select('id')
-      .eq('account_id', userAccountId);
-
-    const instanceIds = (instances as any[])?.map((i: any) => i.id) || [];
-
-    if (instanceIds.length === 0) {
-      return NextResponse.json({ conversations: [] });
-    }
-
-    // Construir query
-    let query = supabase
-      .from('conversations')
-      .select(`
-        *,
-        contact:contacts(*),
-        instance:instances(*)
-      `)
-      .in('instance_id', instanceIds)
-      .order('last_message_at', { ascending: false, nullsFirst: false });
-
-    if (instanceId) {
-      query = query.eq('instance_id', instanceId);
-    }
-
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    const { data: conversations, error } = await query;
-
-    if (error) {
-      console.error('Erro ao buscar conversas:', error);
-      return NextResponse.json(
-        { error: 'Erro ao buscar conversas' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ conversations: conversations || [] });
+    return NextResponse.json({ conversations: conversationsWithRelations });
   } catch (error) {
     console.error('Erro ao listar conversas:', error);
     return NextResponse.json(

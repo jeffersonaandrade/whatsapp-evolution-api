@@ -18,8 +18,10 @@ whatsapp-evolution-api/
 │       └── products/           # Gerenciar produtos
 ├── lib/
 │   ├── evolution-api.ts        # Cliente Evolution API
-│   ├── supabase.ts             # Cliente Supabase
+│   ├── supabase.ts             # Cliente Supabase (legado)
 │   └── services/
+│       ├── sqlite-service.ts   # Serviço SQLite (banco de dados principal)
+│       ├── supabase-service.ts # Serviço de banco (usa SQLite)
 │       └── products.ts         # Serviço de produtos
 ├── types/
 │   ├── index.ts                # Types principais
@@ -50,13 +52,9 @@ Crie um arquivo `.env.local` com as seguintes variáveis:
 NEXT_PUBLIC_EVOLUTION_API_URL=http://localhost:8080
 EVOLUTION_API_KEY=sua-chave-secreta
 
-# Supabase (Opcional - se não configurar, o sistema usará mock)
-NEXT_PUBLIC_SUPABASE_URL=sua-url-supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
-
-# Mock Supabase (Opcional - força uso do mock mesmo com Supabase configurado)
-USE_MOCK_SUPABASE=true
+# SQLite Database
+# Caminho do banco de dados SQLite (padrão: ./data/whatsapp.db)
+SQLITE_DB_PATH=./data/whatsapp.db
 
 # Webhook
 WEBHOOK_SECRET=sua-chave-secreta-webhook
@@ -66,17 +64,16 @@ BRAIN_WEBHOOK_URL=https://seu-projeto-cerebro.com/api/webhook
 BRAIN_WEBHOOK_SECRET=sua-chave-secreta
 ```
 
-### 3. Supabase (Opcional)
+### 3. Banco de Dados SQLite
 
-⚠️ **Por padrão, o sistema usa Supabase mockado** para facilitar o desenvolvimento inicial.
+✅ **O sistema usa SQLite como banco de dados principal**. O banco é criado automaticamente na primeira execução.
 
-Para usar Supabase real:
-1. Configure as variáveis de ambiente do Supabase acima
-2. Execute os scripts SQL em `SCRIPTS_SUPABASE.sql` no SQL Editor do Supabase
-3. Crie um bucket de Storage chamado `products` para imagens de produtos
-4. Configure as políticas de acesso do Storage conforme necessário
+O banco de dados será criado no caminho especificado em `SQLITE_DB_PATH` (padrão: `./data/whatsapp.db`). O diretório `data/` é criado automaticamente se não existir.
 
-📖 **Veja o guia completo**: [`docs/GUIA_MIGRACAO_SUPABASE.md`](docs/GUIA_MIGRACAO_SUPABASE.md)
+**Testar o banco de dados:**
+```bash
+npm run test:sqlite
+```
 
 ### 4. Configurar Evolution API
 

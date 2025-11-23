@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedSupabase } from '@/lib/supabase';
 import { productsService } from '@/lib/services/products';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 /**
  * Atualizar produto
@@ -10,11 +10,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = await createAuthenticatedSupabase();
-    
-    // Verificar autenticação
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const user = await getAuthenticatedUser(request);
+    if (!user?.accountId) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     }
 
@@ -27,16 +24,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
     }
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', user.id)
-      .single();
-
-    // Type assertion necessário devido ao select do Supabase
-    const userAccountId = (userData as any)?.account_id;
-
-    if (userAccountId !== product.account_id) {
+    if (user.accountId !== product.account_id) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 
@@ -68,11 +56,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = await createAuthenticatedSupabase();
-    
-    // Verificar autenticação
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const user = await getAuthenticatedUser(request);
+    if (!user?.accountId) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     }
 
@@ -84,16 +69,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
     }
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', user.id)
-      .single();
-
-    // Type assertion necessário devido ao select do Supabase
-    const userAccountId = (userData as any)?.account_id;
-
-    if (userAccountId !== product.account_id) {
+    if (user.accountId !== product.account_id) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 

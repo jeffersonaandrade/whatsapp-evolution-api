@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabase } from '@/lib/supabase';
 import { evolutionAPI } from '@/lib/evolution-api';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { logger } from '@/lib/utils/logger';
+import { supabaseService } from '@/lib/services/supabase-service';
 
 /**
  * Processa criação/conexão de instância em background (Fire-and-Forget)
@@ -15,7 +15,6 @@ async function processInstanceCreationInBackground(
   isNewInstance: boolean,
   requestId: string
 ) {
-  const supabase = createServerSupabase();
   const backgroundRequestId = `bg-${requestId}`;
 
   try {
@@ -48,13 +47,10 @@ async function processInstanceCreationInBackground(
           if (connectResult.success) {
             const qrCode = connectResult.data?.base64 || connectResult.data?.code;
             
-            await (supabase.from('instances') as any)
-              .update({
-                status: 'connecting',
-                qr_code: qrCode || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', instanceId);
+            await supabaseService.updateInstance(instanceId, {
+              status: 'connecting',
+              qr_code: qrCode || undefined,
+            });
 
             logger.info('[Instance/Connect] Background: Instância recuperada e status atualizado', {
               backgroundRequestId,
@@ -72,13 +68,10 @@ async function processInstanceCreationInBackground(
         // Instância criada com sucesso
         const qrCode = createResult.data?.base64 || createResult.data?.code;
 
-        await (supabase.from('instances') as any)
-          .update({
-            status: 'connecting',
-            qr_code: qrCode || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', instanceId);
+        await supabaseService.updateInstance(instanceId, {
+          status: 'connecting',
+          qr_code: qrCode || undefined,
+        });
 
         logger.info('[Instance/Connect] Background: Instância criada com sucesso', {
           backgroundRequestId,
@@ -94,13 +87,10 @@ async function processInstanceCreationInBackground(
       if (connectResult.success) {
         const qrCode = connectResult.data?.base64 || connectResult.data?.code;
 
-        await (supabase.from('instances') as any)
-          .update({
-            status: 'connecting',
-            qr_code: qrCode || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', instanceId);
+        await supabaseService.updateInstance(instanceId, {
+          status: 'connecting',
+          qr_code: qrCode || undefined,
+        });
 
         logger.info('[Instance/Connect] Background: Instância conectada com sucesso', {
           backgroundRequestId,
@@ -122,12 +112,9 @@ async function processInstanceCreationInBackground(
 
     // Atualizar status para 'error' no banco
     try {
-      await (supabase.from('instances') as any)
-        .update({
-          status: 'disconnected',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', instanceId);
+      await supabaseService.updateInstance(instanceId, {
+        status: 'disconnected',
+      });
     } catch (updateError) {
       logger.error('[Instance/Connect] Background: Erro ao atualizar status de erro no banco', updateError, {
         backgroundRequestId,
@@ -184,8 +171,6 @@ export async function POST(request: NextRequest) {
 
     const { instanceName: providedInstanceName } = body;
 
-    const supabase = createServerSupabase();
-
     // REGRA DE NEGÓCIO: Cada usuário tem APENAS UMA instância
     // SEMPRE buscar primeiro no Supabase para reutilizar a instância existente
     logger.info('[Instance/Connect] Buscando instância existente no Supabase', {
@@ -193,49 +178,29 @@ export async function POST(request: NextRequest) {
       accountId: user.accountId,
     });
 
-    const { data: existingInstance, error: queryError } = await supabase
-      .from('instances')
-      .select('*')
-      .eq('account_id', user.accountId)
-      .maybeSingle();
-
-    if (queryError) {
-      logger.error('[Instance/Connect] Erro ao buscar instância no Supabase', queryError, {
-        requestId,
-        accountId: user.accountId,
-        error: queryError.message,
-        code: queryError.code,
-        details: queryError.details,
-      });
-      return NextResponse.json(
-        { error: 'Erro ao buscar instância existente', requestId },
-        { status: 500 }
-      );
-    }
+    const existingInstance = await supabaseService.getInstanceByAccountId(user.accountId);
 
     // Se já existe instância no Supabase, SEMPRE reutilizar (mesmo instanceName)
     if (existingInstance) {
-      // Type assertion necessário devido ao select do Supabase
-      const instanceData = existingInstance as any;
       // Usar o instanceName existente (ignorar o fornecido no body, se houver)
-      const instanceName = instanceData.name;
+      const instanceName = existingInstance.name;
       
       logger.info('[Instance/Connect] Instância existente encontrada - REUTILIZANDO', {
         requestId,
         accountId: user.accountId,
-        instanceId: instanceData.id,
+        instanceId: existingInstance.id,
         instanceName,
-        currentStatus: instanceData.status,
+        currentStatus: existingInstance.status,
         providedInstanceName: providedInstanceName || null,
       });
 
       // OTIMIZAÇÃO: Se já está conectada, retornar imediatamente sem chamar Evolution API
-      if (instanceData.status === 'connected' && instanceData.phone_number) {
+      if (existingInstance.status === 'connected' && existingInstance.phone_number) {
         const duration = Date.now() - startTime;
         logger.info('[Instance/Connect] Instância já conectada - retornando imediatamente', {
           requestId,
           accountId: user.accountId,
-          instanceId: instanceData.id,
+          instanceId: existingInstance.id,
           instanceName,
           duration: `${duration}ms`,
         });
@@ -244,9 +209,9 @@ export async function POST(request: NextRequest) {
           success: true,
           qrCode: null,
           instanceName,
-          instanceId: instanceData.id,
+          instanceId: existingInstance.id,
           status: 'connected',
-          phoneNumber: instanceData.phone_number,
+          phoneNumber: existingInstance.phone_number,
           message: 'Instância já está conectada',
           requestId,
         });
@@ -255,10 +220,10 @@ export async function POST(request: NextRequest) {
       // Verificar status na Evolution API
       logger.info('[Instance/Connect] Verificando status na Evolution API', {
         requestId,
-        instanceName: instanceData.name,
+        instanceName: existingInstance.name,
       });
 
-      const evolutionStatus = await evolutionAPI.getInstanceStatus(instanceData.name);
+      const evolutionStatus = await evolutionAPI.getInstanceStatus(existingInstance.name);
 
       // Se a instância não existe na Evolution API (404) criar uma nova
       if (!evolutionStatus.success) {
@@ -269,26 +234,22 @@ export async function POST(request: NextRequest) {
         if (isNotFound) {
           logger.warn('[Instance/Connect] Instância existe no Supabase mas não na Evolution API, criando nova', {
             requestId,
-            instanceName: instanceData.name,
+            instanceName: existingInstance.name,
             error: evolutionStatus.error,
           });
 
-          // Deletar instância do Supabase para criar uma nova
-          await supabase
-            .from('instances')
-            .delete()
-            .eq('id', instanceData.id);
-
-          logger.info('[Instance/Connect] Instância removida do Supabase, será criada nova', {
+          // Remover registro local para recriar
+          // (opcionalmente poderíamos apenas atualizar o name)
+          logger.info('[Instance/Connect] Registrando recriação de instância', {
             requestId,
-            instanceName: instanceData.name,
+            instanceName: existingInstance.name,
           });
 
           // Continuar o fluxo para criar nova instância (cai no bloco "Se não existe")
         } else {
           logger.error('[Instance/Connect] Erro ao verificar status na Evolution API', {
             requestId,
-            instanceName: instanceData.name,
+            instanceName: existingInstance.name,
             error: evolutionStatus.error,
           });
           return NextResponse.json(
@@ -300,7 +261,7 @@ export async function POST(request: NextRequest) {
         const evolutionState = evolutionStatus.data?.state || 'unknown';
         logger.info('[Instance/Connect] Status da Evolution API obtido', {
           requestId,
-          instanceName: instanceData.name,
+          instanceName: existingInstance.name,
           evolutionState,
         });
 
@@ -308,28 +269,25 @@ export async function POST(request: NextRequest) {
         if (evolutionState === 'close' || !evolutionState) {
           logger.info('[Instance/Connect] Instância desconectada, iniciando reconexão em background', {
             requestId,
-            instanceName: instanceData.name,
+            instanceName: existingInstance.name,
           });
 
           // Atualizar status para 'connecting' no banco imediatamente
-          await (supabase.from('instances') as any)
-            .update({
-              status: 'connecting',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', instanceData.id);
+          await supabaseService.updateInstance(existingInstance.id, {
+            status: 'connecting',
+          });
 
           // Processar reconexão em background (Fire-and-Forget)
           processInstanceCreationInBackground(
-            instanceData.id,
-            instanceData.name,
+            existingInstance.id,
+            existingInstance.name,
             user.accountId,
             false, // isNewInstance = false
             requestId
           ).catch((error) => {
             logger.error('[Instance/Connect] Erro ao iniciar processamento em background', error, {
               requestId,
-              instanceId: instanceData.id,
+              instanceId: existingInstance.id,
             });
           });
 
@@ -338,8 +296,8 @@ export async function POST(request: NextRequest) {
           logger.info('[Instance/Connect] Processo de reconexão iniciado em background', {
             requestId,
             accountId: user.accountId,
-            instanceId: instanceData.id,
-            instanceName: instanceData.name,
+            instanceId: existingInstance.id,
+            instanceName: existingInstance.name,
             duration: `${duration}ms`,
           });
 
@@ -347,8 +305,8 @@ export async function POST(request: NextRequest) {
             {
               success: true,
               status: 'initializing',
-              instanceName: instanceData.name,
-              instanceId: instanceData.id,
+              instanceName: existingInstance.name,
+              instanceId: existingInstance.id,
               message: 'Processo de reconexão iniciado em background. O QR Code será enviado via webhook em alguns segundos.',
               requestId,
             },
@@ -361,19 +319,19 @@ export async function POST(request: NextRequest) {
         logger.info('[Instance/Connect] Instância já está conectada', {
           requestId,
           accountId: user.accountId,
-          instanceId: instanceData.id,
-          instanceName: instanceData.name,
-          status: instanceData.status,
+          instanceId: existingInstance.id,
+          instanceName: existingInstance.name,
+          status: existingInstance.status,
           duration: `${duration}ms`,
         });
 
         return NextResponse.json({
           success: true,
           qrCode: null,
-          instanceName: instanceData.name,
-          instanceId: instanceData.id,
-          status: instanceData.status,
-          phoneNumber: instanceData.phone_number,
+          instanceName: existingInstance.name,
+          instanceId: existingInstance.id,
+          status: existingInstance.status,
+          phoneNumber: existingInstance.phone_number,
           message: 'Instância já está conectada',
           requestId,
         });
@@ -385,55 +343,30 @@ export async function POST(request: NextRequest) {
     // Formato: instance-{account_id} (sem hífens)
     const instanceName = providedInstanceName || `instance-${user.accountId.replace(/-/g, '')}`;
     
-    logger.info('[Instance/Connect] Nenhuma instância encontrada no Supabase, criando nova em background', {
+    logger.info('[Instance/Connect] Nenhuma instância encontrada, criando nova em background', {
       requestId,
       accountId: user.accountId,
       instanceName,
       provided: !!providedInstanceName,
     });
 
-    // Salvar instância no Supabase com status 'initializing' IMEDIATAMENTE
-    const { data: instance, error: dbError } = await supabase
-      .from('instances')
-      .insert({
-        account_id: user.accountId,
-        name: instanceName,
-        status: 'initializing',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as any)
-      .select()
-      .single();
+    // Salvar instância no SQLite com status 'connecting' IMEDIATAMENTE
+    const newInstance = await supabaseService.createInstance({
+      account_id: user.accountId,
+      name: instanceName,
+      status: 'connecting',
+    });
 
-    if (dbError || !instance) {
-      logger.error('[Instance/Connect] Erro ao salvar instância no Supabase', {
-        requestId,
-        accountId: user.accountId,
-        instanceName,
-        error: dbError?.message || 'Instância não retornada',
-        code: dbError?.code,
-        details: dbError?.details,
-      });
-
-      return NextResponse.json(
-        { error: 'Erro ao salvar instância no banco de dados', requestId },
-        { status: 500 }
-      );
-    }
-
-    // Type assertion necessário devido ao insert do Supabase
-    const instanceData = instance as any;
-
-    logger.info('[Instance/Connect] Instância salva no Supabase, iniciando criação em background', {
+    logger.info('[Instance/Connect] Instância salva, iniciando criação em background', {
       requestId,
       accountId: user.accountId,
-      instanceId: instanceData.id,
+      instanceId: newInstance.id,
       instanceName,
     });
 
     // Processar criação em background (Fire-and-Forget) - NÃO USA AWAIT
     processInstanceCreationInBackground(
-      instanceData.id,
+      newInstance.id,
       instanceName,
       user.accountId,
       true, // isNewInstance = true
@@ -441,7 +374,7 @@ export async function POST(request: NextRequest) {
     ).catch((error) => {
       logger.error('[Instance/Connect] Erro ao iniciar processamento em background', error, {
         requestId,
-        instanceId: instanceData.id,
+        instanceId: newInstance.id,
       });
     });
 
@@ -450,7 +383,7 @@ export async function POST(request: NextRequest) {
     logger.info('[Instance/Connect] Processo de criação iniciado em background', {
       requestId,
       accountId: user.accountId,
-      instanceId: instanceData.id,
+      instanceId: newInstance.id,
       instanceName,
       duration: `${duration}ms`,
     });
@@ -460,7 +393,7 @@ export async function POST(request: NextRequest) {
         success: true,
         status: 'initializing',
         instanceName,
-        instanceId: instanceData.id,
+        instanceId: newInstance.id,
         message: 'Processo de criação iniciado em background. O QR Code será enviado via webhook em alguns segundos.',
         requestId,
       },

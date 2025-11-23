@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedSupabase } from '@/lib/supabase';
 import { evolutionAPI } from '@/lib/evolution-api';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { supabaseService } from '@/lib/services/supabase-service';
 
 /**
  * Desconectar instância WhatsApp
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createAuthenticatedSupabase();
-    
-    // Verificar autenticação
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const user = await getAuthenticatedUser(request);
+    if (!user?.accountId) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     }
 
@@ -21,33 +19,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'instanceName é obrigatório' }, { status: 400 });
     }
 
-    // Verificar se a instância pertence ao usuário
-    const { data: userData } = await supabase
-      .from('users')
-      .select('account_id')
-      .eq('id', user.id)
-      .single();
-
-    // Type assertion necessário devido ao select do Supabase
-    const userAccountId = (userData as any)?.account_id;
-
-    if (!userAccountId) {
-      return NextResponse.json({ error: 'Conta não encontrada' }, { status: 404 });
-    }
-
-    const { data: instance } = await supabase
-      .from('instances')
-      .select('*')
-      .eq('name', instanceName)
-      .eq('account_id', userAccountId)
-      .single();
-
-    if (!instance) {
+    const instance = await supabaseService.getInstanceByName(instanceName);
+    if (!instance || instance.account_id !== user.accountId) {
       return NextResponse.json({ error: 'Instância não encontrada' }, { status: 404 });
     }
-
-    // Type assertion necessário devido ao select do Supabase
-    const instanceData = instance as any;
 
     // Desconectar na Evolution API
     const result = await evolutionAPI.logoutInstance(instanceName);
@@ -59,15 +34,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Atualizar status no Supabase
-    const updateData: any = {
-      status: 'disconnected',
-      updated_at: new Date().toISOString(),
-    };
-    await (supabase
-      .from('instances') as any)
-      .update(updateData)
-      .eq('id', instanceData.id);
+    // Atualizar status no SQLite
+    await supabaseService.updateInstance(instance.id, { status: 'disconnected' });
 
     return NextResponse.json({ success: true });
   } catch (error) {

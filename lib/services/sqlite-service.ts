@@ -223,6 +223,32 @@ class SQLiteService {
   }
 
   /**
+   * Busca contato por ID
+   */
+  async getContactById(contactId: string): Promise<Contact | null> {
+    try {
+      const database = getDatabase();
+      const stmt = database.prepare('SELECT * FROM contacts WHERE id = ?');
+      const row = stmt.get(contactId) as any;
+
+      if (!row) return null;
+
+      return {
+        id: row.id,
+        account_id: row.account_id,
+        phone_number: row.phone_number,
+        name: row.name || undefined,
+        profile_pic_url: row.profile_pic_url || undefined,
+        tags: fromJsonString(row.tags) || undefined,
+        created_at: row.created_at,
+      };
+    } catch (error) {
+      log('error', 'Erro ao buscar contato por ID', { contactId, error });
+      return null;
+    }
+  }
+
+  /**
    * Busca instância por accountId
    */
   async getInstanceByAccountId(accountId: string): Promise<Instance | null> {

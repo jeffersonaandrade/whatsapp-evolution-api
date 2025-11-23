@@ -10,6 +10,7 @@
     "test:evolution": "tsx scripts/test-evolution-api.ts",
     "test:supabase": "tsx scripts/test-supabase.ts",
     "test:sqlite": "tsx scripts/test-sqlite.ts",
+    "test:integration": "tsx scripts/test-integration.ts",
     "query:sqlite": "tsx scripts/query-sqlite.ts",
     "verify": "tsx scripts/verify-system.ts"
   },

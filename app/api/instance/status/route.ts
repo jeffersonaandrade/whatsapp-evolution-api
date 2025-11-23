@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabase } from '@/lib/supabase';
 import { evolutionAPI } from '@/lib/evolution-api';
 import { getAuthenticatedUser } from '@/lib/auth';
+import { supabaseService } from '@/lib/services/supabase-service';
 
 /**
  * Utilitário para logs estruturados
@@ -48,41 +48,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const instanceName = searchParams.get('instanceName');
 
-    const supabase = createServerSupabase();
-
     let instance: any = null;
 
     // Se instanceName foi fornecido, buscar por account_id e name
     // Se não, buscar a primeira instância do usuário
     if (instanceName) {
-      log('info', 'Buscando instância no Supabase por name', {
+      log('info', 'Buscando instância por name', {
         requestId,
         accountId: user.accountId,
         instanceName,
       });
 
-      const { data, error: queryError } = await supabase
-        .from('instances')
-        .select('*')
-        .eq('account_id', user.accountId)
-        .eq('name', instanceName)
-        .maybeSingle();
-
-      if (queryError) {
-        log('error', 'Erro ao buscar instância no Supabase', {
-          requestId,
-          accountId: user.accountId,
-          instanceName,
-          error: queryError.message,
-          code: queryError.code,
-        });
-        return NextResponse.json(
-          { error: 'Erro ao buscar instância', requestId },
-          { status: 500 }
-        );
-      }
-
-      instance = data;
+      const byName = await supabaseService.getInstanceByName(instanceName);
+      if (byName && byName.account_id === user.accountId) instance = byName;
     } else {
       // Buscar primeira instância do usuário
       log('info', 'InstanceName não fornecido, buscando primeira instância do usuário', {
@@ -90,28 +68,7 @@ export async function GET(request: NextRequest) {
         accountId: user.accountId,
       });
 
-      const { data, error: queryError } = await supabase
-        .from('instances')
-        .select('*')
-        .eq('account_id', user.accountId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (queryError) {
-        log('error', 'Erro ao buscar instância no Supabase', {
-          requestId,
-          accountId: user.accountId,
-          error: queryError.message,
-          code: queryError.code,
-        });
-        return NextResponse.json(
-          { error: 'Erro ao buscar instância', requestId },
-          { status: 500 }
-        );
-      }
-
-      instance = data;
+      instance = await supabaseService.getInstanceByAccountId(user.accountId);
     }
 
     if (!instance) {
@@ -201,30 +158,11 @@ export async function GET(request: NextRequest) {
             });
 
             // Salva QR Code no banco
-            const updateData: any = {
+            const updated = await supabaseService.updateInstance(instance.id, {
               qr_code: fetchedQRCode,
               status: 'connecting',
-              updated_at: new Date().toISOString(),
-            };
-            const { error: updateError } = await (supabase
-              .from('instances') as any)
-              .update(updateData)
-              .eq('id', instance.id);
-
-            if (updateError) {
-              log('error', 'Erro ao salvar QR Code no banco', {
-                requestId,
-                instanceId: instance.id,
-                error: updateError.message,
-              });
-            } else {
-              // Atualiza qrCode para retornar na resposta
-              qrCode = fetchedQRCode;
-              log('info', 'QR Code salvo no banco com sucesso', {
-                requestId,
-                instanceName,
-              });
-            }
+            });
+            if (updated) qrCode = fetchedQRCode;
           } else {
             // Verifica se a resposta contém apenas 'count' (payload inválido)
             // IMPORTANTE: A resposta pode estar em result.data diretamente ou em result.data.data

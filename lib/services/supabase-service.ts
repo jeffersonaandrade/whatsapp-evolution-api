@@ -26,6 +26,13 @@ class SupabaseService {
   }
 
   /**
+   * Busca contato por ID
+   */
+  async getContactById(contactId: string): Promise<Contact | null> {
+    return sqliteService.getContactById(contactId);
+  }
+
+  /**
    * Busca instância por accountId (primeira instância da conta)
    */
   async getInstanceByAccountId(accountId: string): Promise<Instance | null> {
